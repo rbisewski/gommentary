@@ -13,8 +13,6 @@ Robert Bisewski <robert.bisewski@umanitoba.ca>
 Copyright (c) 2017 - Vaccine & Drug Evaluation Centre, Winnipeg, MB, Canada.
 All rights reserved.
 
-TODO: implement this program
-
 ~*/
 
 package main
@@ -43,6 +41,9 @@ var (
 
 	// Documentation directory
 	DocumentationDirectory = "docs/"
+
+	// File types with parsable comments
+	ValidFiletypes = []string{".sas", ".do"}
 )
 
 //
@@ -71,6 +72,25 @@ func main() {
 	// default to storing generated docs in a "docs/" folder
 	if DocumentationDirectory == "" {
 		DocumentationDirectory = "docs/"
+	}
+
+	// attempt to read the contents of the code directory
+	extractedComments, err := ReadCommentsFromAllFilesInDirectory(CodeDirectory, ValidFiletypes)
+	if err != nil {
+		fatal(err)
+	}
+
+	// create the docs directory; if it already exists nothing will
+	// happen and the program will continue regardless
+	err = os.MkdirAll(DocumentationDirectory, 0644)
+	if err != nil {
+		fatal(err)
+	}
+
+	// write the documentation to the docs directory
+	err = WriteDocumentation(DocumentationDirectory, extractedComments)
+	if err != nil {
+		fatal(err)
 	}
 
 	os.Exit(0)
