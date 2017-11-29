@@ -40,7 +40,7 @@ var (
 	CodeDirectory = ""
 
 	// Documentation directory
-	DocumentationDirectory = "docs/"
+	DocumentationDirectory = "docs"
 
 	// File types with parsable comments
 	ValidFiletypes = []string{".sas", ".do"}
@@ -69,9 +69,9 @@ func main() {
 		fatal(err)
 	}
 
-	// default to storing generated docs in a "docs/" folder
+	// default to storing generated docs in a "docs" folder
 	if DocumentationDirectory == "" {
-		DocumentationDirectory = "docs/"
+		DocumentationDirectory = "docs"
 	}
 
 	// attempt to read the contents of the code directory
@@ -114,7 +114,7 @@ func setupArguments() error {
 	}
 
 	flag.StringVar(&CodeDirectory, "code-dir", "", "")
-	flag.StringVar(&DocumentationDirectory, "docs-dir", "docs/", "")
+	flag.StringVar(&DocumentationDirectory, "docs-dir", "docs", "")
 	flag.BoolVar(&PrintVersionArgument, "version", false, "")
 
 	flag.Parse()

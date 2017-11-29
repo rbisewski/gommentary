@@ -7,17 +7,19 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"path/filepath"
+	"regexp"
 	"strings"
 )
 
 // ReadCommentsFromAllFilesInDirectory ... search through all files in a given directory for comments
-// TODO: implement this function
 func ReadCommentsFromAllFilesInDirectory(codeDir string, filetypes []string) ([]Comment, error) {
 
 	if codeDir == "" {
 		panic("Code directory name is invalid")
 	}
 
+	listOfFilesToRead := make([]string, 0)
 	comments := make([]Comment, 0)
 
 	codeDirContents, err := ioutil.ReadDir(CodeDirectory)
@@ -25,7 +27,8 @@ func ReadCommentsFromAllFilesInDirectory(codeDir string, filetypes []string) ([]
 		return nil, err
 	}
 
-	for i, file := range codeDirContents {
+	// obtain the list of files to read
+	for _, file := range codeDirContents {
 
 		// skip directory pointers
 		if file.Name() == "." || file.Name() == ".." {
@@ -46,9 +49,76 @@ func ReadCommentsFromAllFilesInDirectory(codeDir string, filetypes []string) ([]
 			continue
 		}
 
-		// TODO: insert further logic here
-		i = i
+		filename := filepath.Join(codeDir, file.Name())
+
+		listOfFilesToRead = append(listOfFilesToRead, filename)
 	}
+
+	if len(listOfFilesToRead) < 1 {
+		return nil, fmt.Errorf("No parsable files were found. Exiting...")
+	}
+
+	// using the list of files, read each of them
+	for i, path := range listOfFilesToRead {
+
+		bytes, err := ioutil.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		contents := string(bytes)
+
+		// if file is empty, skip it
+		if contents == "" {
+			continue
+		}
+
+		parsed, err := ParseStringForComments(contents)
+		if err != nil {
+			return nil, err
+		}
+
+		// if no comments, skip it
+		if len(parsed) < 1 {
+			continue
+		}
+
+		// attach index to comments and append them
+		for _, cmt := range parsed {
+			cmt.Index = i
+			comments = append(comments, cmt)
+		}
+	}
+
+	return comments, nil
+}
+
+// ParseStringForComments ... obtain all comments from a given string
+// TODO: implement this function
+func ParseStringForComments(contents string) ([]Comment, error) {
+	if contents == "" {
+		panic("A given file has unparsable contents.")
+	}
+
+	whitespaceRegexes := []string{"\n", "\t", "\r", "\f", "\v"}
+	commentStrings := make([]string, 0)
+	comments := make([]Comment, 0)
+
+	// clean up unneeded whitespace characters
+	for _, str := range whitespaceRegexes {
+		re := regexp.MustCompile(str)
+		contents = re.ReplaceAllString(contents, "")
+	}
+
+	// handle the |**@keyword ;| comments
+	twoAsterixAtEndsWithSemicolon := regexp.MustCompile("[^\\/]\\s{0,}\\*\\*@[a-zA-Z]+ [^;]+;")
+	matches := twoAsterixAtEndsWithSemicolon.FindAllString(contents, -1)
+	for _, match := range matches {
+		match = match[1:]
+		match = strings.TrimSpace(match)
+		commentStrings = append(commentStrings, match)
+	}
+
+	// TODO: check for other comments
 
 	return comments, nil
 }
