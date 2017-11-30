@@ -4,6 +4,16 @@
 
 package main
 
+// RawComment object definition
+type RawComment struct {
+
+	// line number that the comment was obtained on
+	LineNum int
+
+	// ascii content of the given comment
+	Text string
+}
+
 // Comment object definition
 type Comment struct {
 

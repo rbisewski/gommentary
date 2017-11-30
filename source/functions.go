@@ -9,10 +9,12 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
 // ReadCommentsFromAllFilesInDirectory ... search through all files in a given directory for comments
+// TODO: add logic to this file to handle the "group under" functionality
 func ReadCommentsFromAllFilesInDirectory(codeDir string, filetypes []string) ([]Comment, error) {
 
 	if codeDir == "" {
@@ -95,53 +97,121 @@ func ReadCommentsFromAllFilesInDirectory(codeDir string, filetypes []string) ([]
 	return comments, nil
 }
 
+// GetLineNumber ... obtain the current line number a comment as defined by (startIndex, endIndex) appears on
+func GetLineNumber(lines [][]int, pos []int) (int, error) {
+	if len(lines) == 0 || len(pos) != 2 {
+		panic("Invalid string or comment indices given during line reconstruction attempt.")
+	}
+
+	end := pos[1]
+
+	for i, line := range lines {
+		if len(line) != 2 {
+			return -1, fmt.Errorf("Line mismatched, file is likely corrupted.")
+		}
+		// check against the end of the next line
+		if line[1] >= end {
+			return i + 1, nil
+		}
+	}
+
+	return -1, fmt.Errorf("Comment not found, file is likely corrupted.")
+}
+
 // ParseStringForComments ... obtain all comments from a given string
-// TODO: adjust the logic in this function so that parses comments on a char-by-char basis, so as to determine line order
+// TODO: functionalize and clean up parts of the regex logic used
 func ParseStringForComments(contents string) ([]Comment, error) {
 	if contents == "" {
 		panic("A given file has unparsable contents.")
 	}
 
 	asterixComment := regexp.MustCompile("@[^@]+")
-	whitespaceRegexes := []string{"\n", "\t", "\r", "\f", "\v"}
-	commentStrings := make([]string, 0)
+	whitespaceRegexes := []string{"\t", "\r", "\f", "\v"}
+	commentStrings := make([]RawComment, 0)
 	comments := make([]Comment, 0)
 
+	// obtain newline indices, helpful for reconstructing line numbers
+	newlineRegex := "\n"
+	reNewline := regexp.MustCompile(newlineRegex)
+	lineIndices := reNewline.FindAllStringIndex(contents, -1)
+
+	//
+	// Clean away complicated whitespace characters
+	//
+
 	// clean up unneeded whitespace characters
+	contents = reNewline.ReplaceAllString(contents, " ")
 	for _, str := range whitespaceRegexes {
 		re := regexp.MustCompile(str)
 		contents = re.ReplaceAllString(contents, "")
 	}
 
+	//
+	// Handle the different comment types here
+	//
+
+	// buffer the contents with a space to allow for regexes that check for initial characters
+	contents = " " + contents
+
 	// handle the |**@keyword ;| comments
 	twoAsterixAtEndsWithSemicolon := regexp.MustCompile("[^\\/]\\s{0,}\\*\\*@[a-zA-Z\\.]+ [^;]+;")
-	matches := twoAsterixAtEndsWithSemicolon.FindAllString(contents, -1)
-	for _, match := range matches {
-		match = match[1:]
-		match = strings.TrimSpace(match)
-		commentStrings = append(commentStrings, match)
+	sindices := twoAsterixAtEndsWithSemicolon.FindAllStringIndex(contents, -1)
+	for _, sindex := range sindices {
+		start := sindex[0] + 1
+		end := sindex[1]
+		// take into account very short / empty comments
+		if start == end {
+			continue
+		}
+		// get the line number the comment starts on
+		num, err := GetLineNumber(lineIndices, sindex)
+		if err != nil {
+			return nil, err
+		}
+		raw := contents[start:end]
+		commentStrings = append(commentStrings, RawComment{num, raw})
 	}
 
 	// handle the |** ;| comments
 	twoAsterixEndsWithSemicolon := regexp.MustCompile("[^\\/]\\s{0,}\\*\\*[a-zA-Z\\.]+ [^;]+;")
-	matches = twoAsterixEndsWithSemicolon.FindAllString(contents, -1)
-	for _, match := range matches {
-		match = match[1:]
-		match = strings.TrimSpace(match)
-		commentStrings = append(commentStrings, match)
+	sindices = twoAsterixEndsWithSemicolon.FindAllStringIndex(contents, -1)
+	for _, sindex := range sindices {
+		start := sindex[0] + 1
+		end := sindex[1]
+		// take into account very short / empty comments
+		if start == end {
+			continue
+		}
+		// get the line number the comment starts on
+		num, err := GetLineNumber(lineIndices, sindex)
+		if err != nil {
+			return nil, err
+		}
+		raw := contents[start:end]
+		commentStrings = append(commentStrings, RawComment{num, raw})
 	}
 
 	// handle the |/**@ */| comments
-	slashTwoAsterixAtEndsWithSlash := regexp.MustCompile("\\/\\s{0,}\\*\\*@[a-zA-Z\\.]+ [^\\/]+\\*\\/")
-	matches = slashTwoAsterixAtEndsWithSlash.FindAllString(contents, -1)
-	for _, match := range matches {
-		match = match[1:]
-		match = strings.TrimSpace(match)
+	slashTwoAsterixAtEndsWithSlash := regexp.MustCompile("\\/\\s{0,}\\*\\*\\s{0,}@[a-zA-Z\\.]+ [^\\/]+\\*\\/")
+	sindices = slashTwoAsterixAtEndsWithSlash.FindAllStringIndex(contents, -1)
+	for _, sindex := range sindices {
+		start := sindex[0] + 1
+		end := sindex[1]
+		// take into account very short / empty comments
+		if start == end {
+			continue
+		}
+		// get the line number the comment starts on
+		num, err := GetLineNumber(lineIndices, sindex)
+		if err != nil {
+			return nil, err
+		}
+		raw := contents[start:end]
 
 		// if there is only a single @ comment, just use the whole match
-		pieces := asterixComment.FindAllString(match, -1)
+		pieces := asterixComment.FindAllString(raw, -1)
 		if len(pieces) == 1 {
-			commentStrings = append(commentStrings, match)
+			commentStrings = append(commentStrings, RawComment{num, raw})
 			continue
 		}
 
@@ -155,29 +225,33 @@ func ParseStringForComments(contents string) ([]Comment, error) {
 		//    */
 		//
 		for _, piece := range pieces {
-			commentStrings = append(commentStrings, piece)
+			commentStrings = append(commentStrings, RawComment{num, piece})
 		}
 	}
+
+	//
+	// Convert the raw comment text into meaningful comments
+	//
 
 	// attempt to convert the above comment strings to comments
 	asterixCommentWithSpace := regexp.MustCompile("@[^@\\s]+\\s")
 	for _, str := range commentStrings {
-		newComment := Comment{"", "", "", 0, 0, ""}
+		newComment := Comment{"", "", "", 0, str.LineNum, ""}
 
 		// obtain the keyword, if any
-		match := asterixCommentWithSpace.FindString(str)
+		match := asterixCommentWithSpace.FindString(str.Text)
 
 		// handle the comments that have keywords...
 		if match != "" {
 			newComment.Keyword = match
-			text := asterixCommentWithSpace.Split(str, -1)
+			text := asterixCommentWithSpace.Split(str.Text, -1)
 			if len(text) > 1 {
 				newComment.Text = text[1]
 			}
 
 		} else {
 			// ... else just use the whole string as a comment
-			newComment.Text = str
+			newComment.Text = str.Text
 		}
 
 		// cleanup text
@@ -207,7 +281,13 @@ func WriteDocumentation(docsDir string, comments []Comment) error {
 
 	// TODO: implement logic to make this write it out to a markdown file, etc
 	for _, cmt := range comments {
-		fmt.Println(cmt.Index, cmt.Keyword, cmt.Text)
+		indexAsString := strconv.FormatInt(int64(cmt.Index), 10)
+		lineNumberAsString := strconv.FormatInt(int64(cmt.LineNum), 10)
+		if strings.HasSuffix(cmt.Filename, ".do") {
+			indexAsString = "s" + indexAsString
+		}
+		line := "." + indexAsString + ":" + lineNumberAsString + " " + cmt.Keyword + " " + cmt.Text
+		fmt.Println(line)
 	}
 
 	return nil
