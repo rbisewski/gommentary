@@ -281,12 +281,32 @@ func WriteDocumentation(docsDir string, comments []Comment) error {
 
 	// TODO: implement logic to make this write it out to a markdown file, etc
 	for _, cmt := range comments {
-		indexAsString := strconv.FormatInt(int64(cmt.Index), 10)
-		lineNumberAsString := strconv.FormatInt(int64(cmt.LineNum), 10)
-		if strings.HasSuffix(cmt.Filename, ".do") {
-			indexAsString = "s" + indexAsString
+
+		line := ""
+
+		if cmt.Keyword != "" && strings.Index(cmt.Text, ":") == 0 {
+			// assemble title / author / organization / version information
+			re := regexp.MustCompile(":[a-zA-Z\\.]+ ")
+			match := re.FindString(cmt.Text)
+			text := strings.Split(cmt.Text, match)
+			if len(text) < 2 {
+				return fmt.Errorf("Improperly formatted title comment.")
+			} else if strings.ToLower(match) == ":version " {
+				line = "% Version " + strings.Title(text[1])
+			} else {
+				line = "% " + strings.Title(text[1])
+			}
+
+		} else {
+			// otherwise just a normal comment
+			indexAsString := strconv.FormatInt(int64(cmt.Index), 10)
+			lineNumberAsString := strconv.FormatInt(int64(cmt.LineNum), 10)
+			if strings.HasSuffix(cmt.Filename, ".do") {
+				indexAsString = "s" + indexAsString
+			}
+			line = "." + indexAsString + ":" + lineNumberAsString + " " + cmt.Keyword + " " + cmt.Text
 		}
-		line := "." + indexAsString + ":" + lineNumberAsString + " " + cmt.Keyword + " " + cmt.Text
+
 		fmt.Println(line)
 	}
 
