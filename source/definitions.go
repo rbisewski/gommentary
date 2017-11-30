@@ -13,6 +13,9 @@ type Comment struct {
 	// which keyword this comment should be grouped under
 	GroupUnder string
 
+	// path to the file the comment was found in, mostly useful for debugging purposes
+	Filename string
+
 	// index position representing the order the file was read in
 	Index int
 

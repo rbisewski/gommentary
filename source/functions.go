@@ -59,7 +59,8 @@ func ReadCommentsFromAllFilesInDirectory(codeDir string, filetypes []string) ([]
 	}
 
 	// using the list of files, read each of them
-	for i, path := range listOfFilesToRead {
+	count := 0
+	for _, path := range listOfFilesToRead {
 
 		bytes, err := ioutil.ReadFile(path)
 		if err != nil {
@@ -81,10 +82,12 @@ func ReadCommentsFromAllFilesInDirectory(codeDir string, filetypes []string) ([]
 		if len(parsed) < 1 {
 			continue
 		}
+		count++
 
 		// attach index to comments and append them
 		for _, cmt := range parsed {
-			cmt.Index = i
+			cmt.Filename = path
+			cmt.Index = count
 			comments = append(comments, cmt)
 		}
 	}
@@ -93,12 +96,13 @@ func ReadCommentsFromAllFilesInDirectory(codeDir string, filetypes []string) ([]
 }
 
 // ParseStringForComments ... obtain all comments from a given string
-// TODO: implement this function
+// TODO: adjust the logic in this function so that parses comments on a char-by-char basis, so as to determine line order
 func ParseStringForComments(contents string) ([]Comment, error) {
 	if contents == "" {
 		panic("A given file has unparsable contents.")
 	}
 
+	asterixComment := regexp.MustCompile("@[^@]+")
 	whitespaceRegexes := []string{"\n", "\t", "\r", "\f", "\v"}
 	commentStrings := make([]string, 0)
 	comments := make([]Comment, 0)
@@ -110,7 +114,7 @@ func ParseStringForComments(contents string) ([]Comment, error) {
 	}
 
 	// handle the |**@keyword ;| comments
-	twoAsterixAtEndsWithSemicolon := regexp.MustCompile("[^\\/]\\s{0,}\\*\\*@[a-zA-Z]+ [^;]+;")
+	twoAsterixAtEndsWithSemicolon := regexp.MustCompile("[^\\/]\\s{0,}\\*\\*@[a-zA-Z\\.]+ [^;]+;")
 	matches := twoAsterixAtEndsWithSemicolon.FindAllString(contents, -1)
 	for _, match := range matches {
 		match = match[1:]
@@ -118,7 +122,74 @@ func ParseStringForComments(contents string) ([]Comment, error) {
 		commentStrings = append(commentStrings, match)
 	}
 
-	// TODO: check for other comments
+	// handle the |** ;| comments
+	twoAsterixEndsWithSemicolon := regexp.MustCompile("[^\\/]\\s{0,}\\*\\*[a-zA-Z\\.]+ [^;]+;")
+	matches = twoAsterixEndsWithSemicolon.FindAllString(contents, -1)
+	for _, match := range matches {
+		match = match[1:]
+		match = strings.TrimSpace(match)
+		commentStrings = append(commentStrings, match)
+	}
+
+	// handle the |/**@ */| comments
+	slashTwoAsterixAtEndsWithSlash := regexp.MustCompile("\\/\\s{0,}\\*\\*@[a-zA-Z\\.]+ [^\\/]+\\*\\/")
+	matches = slashTwoAsterixAtEndsWithSlash.FindAllString(contents, -1)
+	for _, match := range matches {
+		match = match[1:]
+		match = strings.TrimSpace(match)
+
+		// if there is only a single @ comment, just use the whole match
+		pieces := asterixComment.FindAllString(match, -1)
+		if len(pieces) == 1 {
+			commentStrings = append(commentStrings, match)
+			continue
+		}
+
+		// handle comments of the type...
+		//
+		//    /**
+		//     @main :title   Experiment #42
+		//     @main :author  John Smith
+		//     @main :org     University of Manitoba
+		//     @main This experiment is designed to take into account the answer to life, the universe, and everything.
+		//    */
+		//
+		for _, piece := range pieces {
+			commentStrings = append(commentStrings, piece)
+		}
+	}
+
+	// attempt to convert the above comment strings to comments
+	asterixCommentWithSpace := regexp.MustCompile("@[^@\\s]+\\s")
+	for _, str := range commentStrings {
+		newComment := Comment{"", "", "", 0, 0, ""}
+
+		// obtain the keyword, if any
+		match := asterixCommentWithSpace.FindString(str)
+
+		// handle the comments that have keywords...
+		if match != "" {
+			newComment.Keyword = match
+			text := asterixCommentWithSpace.Split(str, -1)
+			if len(text) > 1 {
+				newComment.Text = text[1]
+			}
+
+		} else {
+			// ... else just use the whole string as a comment
+			newComment.Text = str
+		}
+
+		// cleanup text
+		newComment.Text = strings.TrimSpace(newComment.Text)
+		newComment.Text = strings.TrimSuffix(newComment.Text, ";")
+		newComment.Text = strings.TrimPrefix(newComment.Text, "**")
+		newComment.Text = strings.TrimPrefix(newComment.Text, "/*")
+		newComment.Text = strings.TrimSuffix(newComment.Text, "*/")
+		newComment.Text = strings.TrimSpace(newComment.Text)
+
+		comments = append(comments, newComment)
+	}
 
 	return comments, nil
 }
@@ -132,6 +203,11 @@ func WriteDocumentation(docsDir string, comments []Comment) error {
 	}
 	if len(comments) < 1 {
 		return fmt.Errorf("No comments were present in the files. Exiting...")
+	}
+
+	// TODO: implement logic to make this write it out to a markdown file, etc
+	for _, cmt := range comments {
+		fmt.Println(cmt.Index, cmt.Keyword, cmt.Text)
 	}
 
 	return nil
