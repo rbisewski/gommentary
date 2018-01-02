@@ -279,36 +279,55 @@ func WriteDocumentation(docsDir string, comments []Comment) error {
 		return fmt.Errorf("No comments were present in the files. Exiting...")
 	}
 
-	// TODO: implement logic to make this write it out to a markdown file, etc
+	markdownContents := ""
+
+	//
+	// Title comments
+	//
 	for _, cmt := range comments {
 
-		line := ""
-
-		if cmt.Keyword != "" && strings.Index(cmt.Text, ":") == 0 {
-			// assemble title / author / organization / version information
-			re := regexp.MustCompile(":[a-zA-Z\\.]+ ")
-			match := re.FindString(cmt.Text)
-			text := strings.Split(cmt.Text, match)
-			if len(text) < 2 {
-				return fmt.Errorf("Improperly formatted title comment.")
-			} else if strings.ToLower(match) == ":version " {
-				line = "% Version " + strings.Title(text[1])
-			} else {
-				line = "% " + strings.Title(text[1])
-			}
-
-		} else {
-			// otherwise just a normal comment
-			indexAsString := strconv.FormatInt(int64(cmt.Index), 10)
-			lineNumberAsString := strconv.FormatInt(int64(cmt.LineNum), 10)
-			if strings.HasSuffix(cmt.Filename, ".do") {
-				indexAsString = "s" + indexAsString
-			}
-			line = "." + indexAsString + ":" + lineNumberAsString + " " + cmt.Keyword + " " + cmt.Text
+		// skip normal comments
+		if cmt.Keyword == "" || strings.Index(cmt.Text, ":") != 0 {
+			continue
 		}
 
-		fmt.Println(line)
+		// assemble title / author / organization / version information
+		re := regexp.MustCompile(":[a-zA-Z\\.]+ ")
+		match := re.FindString(cmt.Text)
+		text := strings.Split(cmt.Text, match)
+		if len(text) < 2 {
+			return fmt.Errorf("Improperly formatted title comment.")
+		} else if strings.ToLower(match) == ":version " {
+			markdownContents += "% Version " + strings.Title(text[1]) + "\n"
+		} else {
+			markdownContents += "% " + strings.Title(text[1]) + "\n"
+		}
 	}
+
+	//
+	// Files and scripts used in project
+	//
+
+	//
+	// Normal comments
+	//
+	for _, cmt := range comments {
+
+		// skip title comments
+		if cmt.Keyword != "" && strings.Index(cmt.Text, ":") == 0 {
+			continue
+		}
+
+		indexAsString := strconv.FormatInt(int64(cmt.Index), 10)
+		lineNumberAsString := strconv.FormatInt(int64(cmt.LineNum), 10)
+		if strings.HasSuffix(cmt.Filename, ".do") {
+			indexAsString = "s" + indexAsString
+		}
+		markdownContents += "." + indexAsString + ":" + lineNumberAsString + " " + cmt.Keyword + " " + cmt.Text + "\n"
+	}
+
+	// TODO: implement logic to make this write it out to a markdown file, etc
+	fmt.Println(markdownContents)
 
 	return nil
 }
