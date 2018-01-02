@@ -307,6 +307,31 @@ func WriteDocumentation(docsDir string, comments []Comment) error {
 	//
 	// Files and scripts used in project
 	//
+	order := 1
+	keywordsMap := make(map[string]int)
+	filesMap := make(map[int]string)
+	markdownContents += "\n# Scripts/macros used for project\n"
+	for _, cmt := range comments {
+
+		// skip title comments
+		if cmt.Keyword != "" && strings.Index(cmt.Text, ":") == 0 {
+			continue
+		}
+
+		filesMap[cmt.Index] = cmt.Filename
+
+		trimmedKeyword := strings.TrimSpace(cmt.Keyword)
+		trimmedKeyword = strings.Trim(cmt.Keyword, "@")
+		if trimmedKeyword != "" && keywordsMap[cmt.Keyword] == 0 {
+			keywordsMap[cmt.Keyword] = order
+			order++
+		}
+	}
+	for i := 1; i <= len(filesMap); i++ {
+		indexAsString := strconv.FormatInt(int64(i), 10)
+		markdownContents += "* " + indexAsString + ": " + filesMap[i] + "\n"
+	}
+	markdownContents += "\n"
 
 	//
 	// Normal comments
@@ -327,6 +352,7 @@ func WriteDocumentation(docsDir string, comments []Comment) error {
 	}
 
 	// TODO: implement logic to make this write it out to a markdown file, etc
+	//fmt.Println(keywordsMap)
 	fmt.Println(markdownContents)
 
 	return nil
