@@ -310,7 +310,7 @@ func WriteDocumentation(docsDir string, comments []Comment) error {
 	order := 1
 	keywordsMap := make(map[string]int)
 	filesMap := make(map[int]string)
-	markdownContents += "\n# Scripts/macros used for project\n"
+	markdownContents += "\n# Scripts/macros used for project\n\n"
 	for _, cmt := range comments {
 
 		// skip title comments
@@ -320,10 +320,11 @@ func WriteDocumentation(docsDir string, comments []Comment) error {
 
 		filesMap[cmt.Index] = cmt.Filename
 
+		// add keyword subtitles
 		trimmedKeyword := strings.TrimSpace(cmt.Keyword)
-		trimmedKeyword = strings.Trim(cmt.Keyword, "@")
-		if trimmedKeyword != "" && keywordsMap[cmt.Keyword] == 0 {
-			keywordsMap[cmt.Keyword] = order
+		trimmedKeyword = strings.Trim(trimmedKeyword, "@")
+		if trimmedKeyword != "" && keywordsMap[trimmedKeyword] == 0 {
+			keywordsMap[trimmedKeyword] = order
 			order++
 		}
 	}
@@ -331,28 +332,53 @@ func WriteDocumentation(docsDir string, comments []Comment) error {
 		indexAsString := strconv.FormatInt(int64(i), 10)
 		markdownContents += "* " + indexAsString + ": " + filesMap[i] + "\n"
 	}
-	markdownContents += "\n"
 
 	//
 	// Normal comments
 	//
-	for _, cmt := range comments {
+	for i := 1; i <= len(keywordsMap); i++ {
 
-		// skip title comments
-		if cmt.Keyword != "" && strings.Index(cmt.Text, ":") == 0 {
-			continue
+		currentKeyword := ""
+
+		for key, value := range keywordsMap {
+			if i == value {
+				currentKeyword = key
+			}
 		}
 
-		indexAsString := strconv.FormatInt(int64(cmt.Index), 10)
-		lineNumberAsString := strconv.FormatInt(int64(cmt.LineNum), 10)
-		if strings.HasSuffix(cmt.Filename, ".do") {
-			indexAsString = "s" + indexAsString
+		if currentKeyword != "" {
+			markdownContents += "\n# " + strings.Title(currentKeyword) + "\n\n"
 		}
-		markdownContents += "." + indexAsString + ":" + lineNumberAsString + " " + cmt.Keyword + " " + cmt.Text + "\n"
+
+		counter := 1
+		for _, cmt := range comments {
+
+			// skip title comments
+			if cmt.Keyword != "" && strings.Index(cmt.Text, ":") == 0 {
+				continue
+			}
+
+			// skip if the comment is not associated with that keywords
+			trimmedKeyword := strings.TrimSpace(cmt.Keyword)
+			trimmedKeyword = strings.Trim(trimmedKeyword, "@")
+			if trimmedKeyword != currentKeyword {
+				continue
+			}
+
+			indexAsString := strconv.FormatInt(int64(cmt.Index), 10)
+			counterAsString := strconv.FormatInt(int64(counter), 10)
+			lineNumberAsString := strconv.FormatInt(int64(cmt.LineNum), 10)
+			if strings.HasSuffix(cmt.Filename, ".do") {
+				indexAsString = "s" + indexAsString
+			}
+
+			markdownContents += indexAsString + "." + counterAsString + ":" + lineNumberAsString + " " + cmt.Text + "\n"
+
+			counter++
+		}
 	}
 
 	// TODO: implement logic to make this write it out to a markdown file, etc
-	//fmt.Println(keywordsMap)
 	fmt.Println(markdownContents)
 
 	return nil
