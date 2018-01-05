@@ -34,3 +34,9 @@ To run the current test suite of this program, type the following command:
 
 If all of the tests pass and are listed as ok, then the IO functions of this
 program work as expected.
+
+# TODOs
+
+* Implement logic to obtain lists of the SAS macros used.
+
+* Add support for other programming languages, if possible.
