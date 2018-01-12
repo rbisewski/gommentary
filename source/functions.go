@@ -15,18 +15,19 @@ import (
 
 // ReadCommentsFromAllFilesInDirectory ... search through all files in a given directory for comments
 // TODO: add logic to this file to handle the "group under" functionality
-func ReadCommentsFromAllFilesInDirectory(codeDir string, filetypes []string) ([]Comment, error) {
+func ReadCommentsFromAllFilesInDirectory(codeDir string, filetypes []string) ([]IncludedMacro, []Comment, error) {
 
 	if codeDir == "" {
 		panic("Code directory name is invalid")
 	}
 
 	listOfFilesToRead := make([]string, 0)
+	includes := make([]IncludedMacro, 0)
 	comments := make([]Comment, 0)
 
 	codeDirContents, err := ioutil.ReadDir(CodeDirectory)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// obtain the list of files to read
@@ -57,7 +58,7 @@ func ReadCommentsFromAllFilesInDirectory(codeDir string, filetypes []string) ([]
 	}
 
 	if len(listOfFilesToRead) < 1 {
-		return nil, fmt.Errorf("No parsable files were found. Exiting...")
+		return nil, nil, fmt.Errorf("No parsable files were found. Exiting...")
 	}
 
 	// using the list of files, read each of them
@@ -66,7 +67,7 @@ func ReadCommentsFromAllFilesInDirectory(codeDir string, filetypes []string) ([]
 
 		bytes, err := ioutil.ReadFile(path)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		contents := string(bytes)
 
@@ -75,10 +76,14 @@ func ReadCommentsFromAllFilesInDirectory(codeDir string, filetypes []string) ([]
 			continue
 		}
 
-		// TODO: adjust this so that it handles includes as well
-		_, parsed, err := ParseStringForComments(contents)
+		included, parsed, err := ParseStringForComments(contents)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+
+		// attach index to comments and append them
+		for _, incl := range included {
+			includes = append(includes, incl)
 		}
 
 		// if no comments, skip it
@@ -95,7 +100,7 @@ func ReadCommentsFromAllFilesInDirectory(codeDir string, filetypes []string) ([]
 		}
 	}
 
-	return comments, nil
+	return includes, comments, nil
 }
 
 // GetLineNumber ... obtain the current line number a comment as defined by (startIndex, endIndex) appears on
@@ -261,10 +266,10 @@ func ParseStringForComments(contents string) ([]IncludedMacro, []Comment, error)
 		sansSemicolon := strings.Trim(str.Text, ";")
 		sansSpaces := strings.TrimSpace(sansSemicolon)
 
-		pieces := strings.Split(sansSpaces, "%include")
+		pieces := strings.Split(sansSpaces, "include")
 
 		// skip empty or improper entries, if any
-		if len(pieces) < 1 || pieces[1] == "" {
+		if len(pieces) < 2 || pieces[1] == "" {
 			continue
 		}
 
@@ -273,20 +278,23 @@ func ParseStringForComments(contents string) ([]IncludedMacro, []Comment, error)
 		sansDoubleQuotes := strings.Trim(pieces[1], "\"")
 		sansQuotes := strings.Trim(sansDoubleQuotes, "'")
 		sansPathSpaces := strings.TrimSpace(sansQuotes)
+		sansFewerQuotes := strings.Trim(sansPathSpaces, "'")
+		sansFewerDoubleQuotes := strings.Trim(sansFewerQuotes, "\"")
+		rawPath := sansFewerDoubleQuotes
 
 		// skip empty entries, if any
-		if sansPathSpaces == "" {
+		if rawPath == "" {
 			continue
 		}
 
 		// ignore if the path does not include the word macro
-		lowercasePath := strings.ToLower(sansPathSpaces)
+		lowercasePath := strings.ToLower(rawPath)
 		if !strings.Contains(lowercasePath, "macro") {
 			continue
 		}
 
 		// if got this far, then probably is a path, so create an included macro entry, then append it
-		newIncludedMacro := IncludedMacro{str.LineNum, sansPathSpaces}
+		newIncludedMacro := IncludedMacro{str.LineNum, rawPath}
 		includes = append(includes, newIncludedMacro)
 	}
 
@@ -331,7 +339,7 @@ func ParseStringForComments(contents string) ([]IncludedMacro, []Comment, error)
 
 // WriteDocumentation ... generate documentation using the comments and write it out to file
 // TODO: implement this function
-func WriteDocumentation(docsDir string, comments []Comment) error {
+func WriteDocumentation(docsDir string, includes []IncludedMacro, comments []Comment) error {
 
 	if docsDir == "" {
 		panic("Docs directory name is invalid")
@@ -366,12 +374,12 @@ func WriteDocumentation(docsDir string, comments []Comment) error {
 	}
 
 	//
-	// Files and scripts used in project
+	// Code files used in the project
 	//
 	order := 1
 	keywordsMap := make(map[string]int)
 	filesMap := make(map[int]string)
-	markdownContents += "\n# Scripts/macros used for project\n\n"
+	markdownContents += "\n# Code files used for project\n\n"
 	for _, cmt := range comments {
 
 		// skip title comments
@@ -392,6 +400,28 @@ func WriteDocumentation(docsDir string, comments []Comment) error {
 	for i := 1; i <= len(filesMap); i++ {
 		indexAsString := strconv.FormatInt(int64(i), 10)
 		markdownContents += "* " + indexAsString + ": " + filesMap[i] + "\n"
+	}
+
+	//
+	// Scripts / macros used for the project
+	//
+	includesMap := make(map[string]int)
+
+	markdownContents += "\n# Scripts/macros used for project\n\n"
+	for _, incl := range includes {
+
+		if incl.MacroPath == "" {
+			continue
+		}
+
+		// skip already appended includes
+		if includesMap[incl.MacroPath] == 1 {
+			continue
+		}
+
+		includesMap[incl.MacroPath] = 1
+
+		markdownContents += "* " + incl.MacroPath + "\n"
 	}
 
 	//

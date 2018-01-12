@@ -75,7 +75,7 @@ func main() {
 	}
 
 	// attempt to read the contents of the code directory
-	extractedComments, err := ReadCommentsFromAllFilesInDirectory(CodeDirectory, ValidFiletypes)
+	extractedIncludes, extractedComments, err := ReadCommentsFromAllFilesInDirectory(CodeDirectory, ValidFiletypes)
 	if err != nil {
 		fatal(err)
 	}
@@ -88,7 +88,7 @@ func main() {
 	}
 
 	// write the documentation to the docs directory
-	err = WriteDocumentation(DocumentationDirectory, extractedComments)
+	err = WriteDocumentation(DocumentationDirectory, extractedIncludes, extractedComments)
 	if err != nil {
 		fatal(err)
 	}
