@@ -75,7 +75,8 @@ func ReadCommentsFromAllFilesInDirectory(codeDir string, filetypes []string) ([]
 			continue
 		}
 
-		parsed, err := ParseStringForComments(contents)
+		// TODO: adjust this so that it handles includes as well
+		_, parsed, err := ParseStringForComments(contents)
 		if err != nil {
 			return nil, err
 		}
@@ -120,14 +121,16 @@ func GetLineNumber(lines [][]int, pos []int) (int, error) {
 
 // ParseStringForComments ... obtain all comments from a given string
 // TODO: functionalize and clean up parts of the regex logic used
-func ParseStringForComments(contents string) ([]Comment, error) {
+func ParseStringForComments(contents string) ([]IncludedMacro, []Comment, error) {
 	if contents == "" {
 		panic("A given file has unparsable contents.")
 	}
 
 	asterixComment := regexp.MustCompile("@[^@]+")
 	whitespaceRegexes := []string{"\t", "\r", "\f", "\v"}
+	includeStrings := make([]RawInclude, 0)
 	commentStrings := make([]RawComment, 0)
+	includes := make([]IncludedMacro, 0)
 	comments := make([]Comment, 0)
 
 	// obtain newline indices, helpful for reconstructing line numbers
@@ -153,9 +156,28 @@ func ParseStringForComments(contents string) ([]Comment, error) {
 	// buffer the contents with a space to allow for regexes that check for initial characters
 	contents = " " + contents
 
+	// handle the |%include '/path/to/macro.sas';| include statements
+	includeMacroLine := regexp.MustCompile("%include\\s+[^;]+;")
+	sindices := includeMacroLine.FindAllStringIndex(contents, -1)
+	for _, sindex := range sindices {
+		start := sindex[0] + 1
+		end := sindex[1]
+		// take into account very short / empty lines
+		if start == end {
+			continue
+		}
+		// get the line number the %include starts on
+		num, err := GetLineNumber(lineIndices, sindex)
+		if err != nil {
+			return nil, nil, err
+		}
+		raw := contents[start:end]
+		includeStrings = append(includeStrings, RawInclude{num, raw})
+	}
+
 	// handle the |**@keyword ;| comments
 	twoAsterixAtEndsWithSemicolon := regexp.MustCompile("[^\\/]\\s{0,}\\*\\*@[a-zA-Z\\.]+ [^;]+;")
-	sindices := twoAsterixAtEndsWithSemicolon.FindAllStringIndex(contents, -1)
+	sindices = twoAsterixAtEndsWithSemicolon.FindAllStringIndex(contents, -1)
 	for _, sindex := range sindices {
 		start := sindex[0] + 1
 		end := sindex[1]
@@ -166,7 +188,7 @@ func ParseStringForComments(contents string) ([]Comment, error) {
 		// get the line number the comment starts on
 		num, err := GetLineNumber(lineIndices, sindex)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		raw := contents[start:end]
 		commentStrings = append(commentStrings, RawComment{num, raw})
@@ -185,7 +207,7 @@ func ParseStringForComments(contents string) ([]Comment, error) {
 		// get the line number the comment starts on
 		num, err := GetLineNumber(lineIndices, sindex)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		raw := contents[start:end]
 		commentStrings = append(commentStrings, RawComment{num, raw})
@@ -204,7 +226,7 @@ func ParseStringForComments(contents string) ([]Comment, error) {
 		// get the line number the comment starts on
 		num, err := GetLineNumber(lineIndices, sindex)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		raw := contents[start:end]
 
@@ -227,6 +249,45 @@ func ParseStringForComments(contents string) ([]Comment, error) {
 		for _, piece := range pieces {
 			commentStrings = append(commentStrings, RawComment{num, piece})
 		}
+	}
+
+	//
+	// Convert the raw include statements into the actual macros imported
+	//
+
+	for _, str := range includeStrings {
+
+		// trim away unneeded chars
+		sansSemicolon := strings.Trim(str.Text, ";")
+		sansSpaces := strings.TrimSpace(sansSemicolon)
+
+		pieces := strings.Split(sansSpaces, "%include")
+
+		// skip empty or improper entries, if any
+		if len(pieces) < 1 || pieces[1] == "" {
+			continue
+		}
+
+		// trim " and ' chars to obtain the included path, along with
+		// any spaces inside of the included path, if any
+		sansDoubleQuotes := strings.Trim(pieces[1], "\"")
+		sansQuotes := strings.Trim(sansDoubleQuotes, "'")
+		sansPathSpaces := strings.TrimSpace(sansQuotes)
+
+		// skip empty entries, if any
+		if sansPathSpaces == "" {
+			continue
+		}
+
+		// ignore if the path does not include the word macro
+		lowercasePath := strings.ToLower(sansPathSpaces)
+		if !strings.Contains(lowercasePath, "macro") {
+			continue
+		}
+
+		// if got this far, then probably is a path, so create an included macro entry, then append it
+		newIncludedMacro := IncludedMacro{str.LineNum, sansPathSpaces}
+		includes = append(includes, newIncludedMacro)
 	}
 
 	//
@@ -265,7 +326,7 @@ func ParseStringForComments(contents string) ([]Comment, error) {
 		comments = append(comments, newComment)
 	}
 
-	return comments, nil
+	return includes, comments, nil
 }
 
 // WriteDocumentation ... generate documentation using the comments and write it out to file

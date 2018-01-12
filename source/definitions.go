@@ -4,6 +4,26 @@
 
 package main
 
+// RawInclude object defintion
+type RawInclude struct {
+
+	// line number that the %include was obtained on
+	LineNum int
+
+	// ascii content of the given %include statement
+	Text string
+}
+
+// IncludedMacro object definition
+type IncludedMacro struct {
+
+	// line number that the %include was obtained on
+	LineNum int
+
+	// path the macro is located in
+	MacroPath string
+}
+
 // RawComment object definition
 type RawComment struct {
 
