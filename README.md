@@ -37,6 +37,6 @@ program work as expected.
 
 # TODOs
 
-* Implement logic to obtain lists of the SAS macros used.
+* Consider support for additional types of SAS / Stata comments.
 
 * Add support for other programming languages, if possible.
