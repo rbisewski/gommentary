@@ -5,6 +5,7 @@
 package main
 
 import (
+	"./fileutils"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -338,8 +339,7 @@ func ParseStringForComments(contents string) ([]IncludedMacro, []Comment, error)
 }
 
 // WriteDocumentation ... generate documentation using the comments and write it out to file
-// TODO: implement this function
-func WriteDocumentation(docsDir string, includes []IncludedMacro, comments []Comment) error {
+func WriteDocumentation(docsDir string, files []string, includes []IncludedMacro, comments []Comment) error {
 
 	if docsDir == "" {
 		panic("Docs directory name is invalid")
@@ -469,8 +469,17 @@ func WriteDocumentation(docsDir string, includes []IncludedMacro, comments []Com
 		}
 	}
 
-	// TODO: implement logic to make this write it out to a markdown file, etc
-	fmt.Println(markdownContents)
+	// write out the contents to a markdown file, force overwrite at this time
+	for _, filename := range files {
 
+		currentFile := filepath.Join(docsDir, filename)
+
+		err := fileutils.WriteToFile(currentFile, markdownContents, true)
+		if err != nil {
+			return err
+		}
+	}
+
+	// if got this far, everything worked as intended
 	return nil
 }

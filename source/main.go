@@ -42,6 +42,9 @@ var (
 	// Documentation directory
 	DocumentationDirectory = "docs"
 
+	// Markdown output filenames
+	OutputFiles = []string{"output-coder.md", "output-for-all.md"}
+
 	// File types with parsable comments
 	ValidFiletypes = []string{".sas", ".do"}
 )
@@ -88,7 +91,7 @@ func main() {
 	}
 
 	// write the documentation to the docs directory
-	err = WriteDocumentation(DocumentationDirectory, extractedIncludes, extractedComments)
+	err = WriteDocumentation(DocumentationDirectory, OutputFiles, extractedIncludes, extractedComments)
 	if err != nil {
 		fatal(err)
 	}
