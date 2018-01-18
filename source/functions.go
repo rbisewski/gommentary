@@ -183,26 +183,14 @@ func ParseStringForComments(contents string) ([]IncludedMacro, []Comment, error)
 
 	// handle the |**@keyword ;| comments
 	twoAsterixAtEndsWithSemicolon := regexp.MustCompile("[^\\/]\\s{0,}\\*\\*@[a-zA-Z\\.]+ [^;]+;")
-	sindices = twoAsterixAtEndsWithSemicolon.FindAllStringIndex(contents, -1)
-	for _, sindex := range sindices {
-		start := sindex[0] + 1
-		end := sindex[1]
-		// take into account very short / empty comments
-		if start == end {
-			continue
-		}
-		// get the line number the comment starts on
-		num, err := GetLineNumber(lineIndices, sindex)
-		if err != nil {
-			return nil, nil, err
-		}
-		raw := contents[start:end]
-		commentStrings = append(commentStrings, RawComment{num, raw})
-	}
+	sidx1 := twoAsterixAtEndsWithSemicolon.FindAllStringIndex(contents, -1)
 
 	// handle the |** ;| comments
 	twoAsterixEndsWithSemicolon := regexp.MustCompile("[^\\/]\\s{0,}\\*\\*[a-zA-Z\\.]+ [^;]+;")
-	sindices = twoAsterixEndsWithSemicolon.FindAllStringIndex(contents, -1)
+	sidx2 := twoAsterixEndsWithSemicolon.FindAllStringIndex(contents, -1)
+
+	// cycle through all of the gathered results
+	sindices = append(sidx1, sidx2...)
 	for _, sindex := range sindices {
 		start := sindex[0] + 1
 		end := sindex[1]
