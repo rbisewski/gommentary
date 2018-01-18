@@ -40,3 +40,5 @@ program work as expected.
 * Consider support for additional types of SAS / Stata comments.
 
 * Add support for other programming languages, if possible.
+
+* Implement an argument flag to allow the user to select output filename.
