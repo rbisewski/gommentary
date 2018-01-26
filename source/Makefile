@@ -24,7 +24,7 @@ endif
 
 
 # State the "phony" targets
-.PHONY: all clean build install uninstall
+.PHONY: all clean build
 
 
 all: build
