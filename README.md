@@ -1,6 +1,9 @@
 # Gommentary
 
-Documentation generator using program comments for SAS and Stata code.
+Markdown documentation generator using program comments from SAS and Stata
+code. Since old languages such as these tend to have odd comment styles, this
+program assists in obtaining critical design information from previously
+written code.
 
 ## Compilation
 
@@ -41,4 +44,5 @@ program work as expected.
 
 * Add support for other programming languages, if possible.
 
-* Implement an argument flag to allow the user to select output filename.
+* Implement an argument flag to allow the user to select the desired output
+  filename.
